@@ -1,0 +1,149 @@
+---
+title: "Regression Models Course Project"
+author: "Andrew Januszewski"
+output: pdf_document
+geometry: margin = 1cm
+---
+\fontsize{9}{3}
+
+##**Setup**
+```{r setup, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(GGally)
+knitr::opts_chunk$set(echo = TRUE)
+data("mtcars")
+```
+
+##**Executive Summary**
+
+    Moter Trend, a magazine about the automobile industry, is interested in examining the relationship between
+    a set of variables and miles per gallon (MPG). They are particularly interested in answering the following
+    questions:
+        * Is an automatic or manual transmission better for MPG?
+        * Can we quantify the difference between automatic and manual transmissions?
+    This analysis concludeds manual transmissions are better for MPG than automatic. The three best predictors
+    of MPG were transmission type, vehicle weight, and 1/4 mile time. Holding the other two variables constant,
+    manual transmissions are ~2.94 more MPG efficient than automatics.
+      
+##**Exploratory Data Analysis**
+
+    As shown in appendix figure one, transmission type (am, 0 = automatic, 1 = manual) and MPG share a 
+    moderately strong, positive correlation. However. we also see other variables having similar or stronger
+    correlation values with MPG (bottom row of figure one). As such, these predictors should be controlled
+    for during any predictive model fitting.
+```{r, eval = F}
+ggcorr(mtcars, name = 'Correlation', label = T)
+```
+    
+    For instance, consider the strong negative correlation between horsepower (hp) and MPG. It suggests as 
+    horsepower increases, MPG decreases. Figure two in the appendix confirms this notion (black line). 
+    However, notice that our prediction changes significantly when we include transmission type (am) as a 
+    variable (blue - manual, red - automatic). Also, take note that the relationship between horsepower
+    and MPG appears to be non-linear.
+    
+```{r, eval = F}
+ggplot(mtcars, aes(y = mpg, x = hp, color = factor(am))) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x, color = 'black', se = F) +  
+  geom_smooth(method = 'lm', se = F) +
+  labs(y = 'MPG', x = 'Horsepower') +
+  theme(legend.position = 'none')
+```
+    
+    We can further prove these observations by examining the residuals of each model. Appendix figure three 
+    displays a reduction in Residual Standard Error (RSE) from 3.863 to 2.909. Additionally, explained error
+    (R-squared) increased with the addition of am as a predictor. As we know, R-squared will continually 
+    grow with every variable added. However, Adjusted R-squared accounts for that and increased from
+    0.5892 to 0.767. Furthermore, both predictors are siginificant and a nested model confirms that in
+    figure four.
+    
+```{r, eval = F}
+fit_mpg_hp <- lm(data = mtcars, mpg ~ hp - 1)
+fit_mpg_hp_am <- lm(data = mtcars, mpg ~ hp + factor(am) - 1)
+summary(fit_mpg_hp)
+summary(fit_mpg_hp_am)
+anova(fit_mpg_hp, fit_mpg_hp_am)
+```
+    
+    A plot of the residuals in appendix figure five also shows much less dispersion around zero with
+    the addition of am as a predictor.
+```{r, eval = F}
+plot(fit_mpg_hp$residuals)
+plot(fit_mpg_hp_am$residuals)
+```
+    
+##**Data Modeling**
+
+    We will fit and compare two linear models to answer the questions. The first will be extremely 
+    simple while the second will leverage more variables choosen with some automobile knowledge. 
+    
+    For the simple model, we use transmission type as the sole predictor of MPG. It appears transmission type
+    is significant, but this simple model only explains ~34% of variance.
+```{r, echo = T}
+fit_lm_simple <- lm(data = mtcars, mpg ~ factor(am))
+summary(fit_lm_simple)
+```
+    
+    For the second model, we will use some subject matter knowledge to include additional predictors. This 
+    knowledge allows us to discount some combinations of highly correlated variables such as displacement 
+    and cylinders as they are semi-interchangeable (displacement is the volume of all the pistons inside 
+    the cylinders, more cylinders = higher displacement). Both are also highly correlated with horsepower. 
+    Using this logic, we can exclude several other combinations. These could also be verified with the 
+    Variance Inflation Factor (VIF), but we're running out of allotted pages for this assignment so we'll
+    use the step function to find the most crucial variables.
+    
+    Again, transmission type is significant and the model now explains 83% of variance. This means 17% of
+    unexplained variance could come from variables outside the model and dataset. Keeping this uncertainty
+    in mind, we can conclude that manual transmissions are better for MPG. Holding the other two most 
+    explanatory variables constant (wt and qsec), manual transmissions are ~2.94 more MPG efficient.
+```{r, echo = T}
+fit_lm_vars <- step(lm(data = mtcars, mpg ~ . - cyl - disp - gear - drat), trace = 0)
+summary(fit_lm_vars)
+```    
+
+\pagebreak
+
+##**Appendix**
+
+###**Figure 1:**
+```{r, echo = F, fig.width = 5, fig.height = 4.5}
+ggcorr(mtcars, name = 'Correlation', label = T) +
+  labs(subtitle = ' 0.0 - No Linear Relationship \n 0.3 - Weak \n 0.5 - Moderate \n 0.7 - Strong \n 1.0 - Exact') +
+  theme(plot.subtitle = element_text(vjust = -40))
+```
+
+###**Figure 2:**
+    Black = MPG predicted by horsepower
+    Blue = MPG predicted by horsepower for manual transmission
+    Red = MPG predicted by horsepower for automatic transmission
+```{r, echo = F, fig.width = 6, fig.height = 4}
+ggplot(mtcars, aes(y = mpg, x = hp, color = factor(am))) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x, color = 'black', se = F) +  
+  geom_smooth(method = 'lm', se = F) +
+  labs(y = 'MPG', x = 'Horsepower') +
+  theme(legend.position = 'none')
+```
+
+###**Figure 3:**
+```{r, echo = F}
+fit_mpg_hp <- lm(data = mtcars, mpg ~ hp)
+fit_mpg_hp_am <- lm(data = mtcars, mpg ~ hp + factor(am))
+
+summary(fit_mpg_hp)
+summary(fit_mpg_hp_am)
+```
+
+###**Figure 4:**
+```{r, echo = F}
+anova(fit_mpg_hp, fit_mpg_hp_am)
+```
+
+###**Figure 5:**
+```{r, echo = F}
+plot(fit_mpg_hp$residuals)
+```
+
+```{r, echo = F}
+plot(fit_mpg_hp_am$residuals)
+```
